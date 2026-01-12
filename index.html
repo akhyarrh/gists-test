@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        /* Animasi loading sederhana */
         .fade-in { animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -19,9 +18,16 @@
     <header class="bg-slate-900 text-white pt-10 pb-20 shadow-lg relative overflow-hidden">
         <div class="container mx-auto px-4 text-center relative z-10">
             <img id="avatar" src="https://github.com/identicons/akhyarrh.png" alt="Profile" class="w-20 h-20 rounded-full mx-auto border-4 border-slate-700 shadow-xl mb-4 bg-slate-800">
-            <h1 class="text-3xl font-bold mb-2">Gist <span class="text-blue-400">@akhyarrh</span></h1>
             
-            <!-- SEARCH / FILTER INPUT (Adaptasi dari logic 'filter' di Vue) -->
+            <!-- UPDATE: Judul dengan Link Profil -->
+            <h1 class="text-3xl font-bold mb-2">
+                Gist 
+                <a href="https://github.com/akhyarrh" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline decoration-2 underline-offset-4 transition-all">
+                    @akhyarrh
+                </a>
+            </h1>
+            
+            <!-- Search Input -->
             <div class="max-w-md mx-auto mt-6 relative">
                 <i class="fas fa-search absolute left-4 top-3.5 text-gray-400"></i>
                 <input type="text" id="filterInput" placeholder="Cari deskripsi gist..." 
@@ -30,17 +36,16 @@
             </div>
         </div>
         
-        <!-- Decorative bg -->
         <div class="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
     </header>
 
     <!-- Main Content -->
     <main class="container mx-auto px-4 -mt-10 pb-10 flex-grow z-20 relative">
         
-        <!-- Loading & Error Message -->
+        <!-- Status Message -->
         <div id="status-message" class="text-center bg-white p-6 rounded-lg shadow-md max-w-lg mx-auto mb-6">
             <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500 mb-3"></i>
-            <p class="text-gray-600">Memuat data dari GitHub API...</p>
+            <p class="text-gray-600">Memuat data...</p>
         </div>
 
         <!-- Gist Grid Container -->
@@ -55,27 +60,22 @@
     </footer>
 
     <script>
-        // --- LOGIC ADAPTASI DARI REFERENCE FILE ---
-        
         const config = {
             username: 'akhyarrh',
             limit: 100
         };
 
-        // Menyimpan data global untuk fitur filtering
         let allGistsData = [];
 
-        // 1. Helper function untuk URL (Sesuai referensi gistsApiUrl)
         function gistsApiUrl(username, limit = 100) {
             return `https://api.github.com/users/${username}/gists?per_page=${limit}`;
         }
 
-        // 2. Fetch Logic
         async function fetchGists() {
             const statusDiv = document.getElementById('status-message');
             const url = gistsApiUrl(config.username, config.limit);
 
-            // Ambil juga data user untuk avatar yang valid
+            // Fetch Avatar
             fetch(`https://api.github.com/users/${config.username}`).then(r=>r.json()).then(u => {
                 if(u.avatar_url) document.getElementById('avatar').src = u.avatar_url;
             });
@@ -86,25 +86,19 @@
                 
                 let data = await resp.json();
 
-                // Cek jika array kosong
                 if (!Array.isArray(data) || data.length === 0) {
-                    throw new Error("Tidak ada gists yang ditemukan (Data kosong).");
+                    throw new Error("Tidak ada gists publik ditemukan.");
                 }
 
-                // --- SORTING LOGIC (Sesuai method sortBy di referensi) ---
-                // Kita normalisasi deskripsi agar tidak error saat null
+                // --- UPDATE: SORTING LOGIC (NEWEST FIRST) ---
+                // Mengurutkan berdasarkan 'created_at' secara descending (terbaru ke terlama)
                 data.sort((a, b) => {
-                    const descA = (a.description || "").toLowerCase();
-                    const descB = (b.description || "").toLowerCase();
-                    if (descA > descB) return 1;
-                    if (descA < descB) return -1;
-                    return 0;
+                    return new Date(b.created_at) - new Date(a.created_at);
                 });
 
-                allGistsData = data; // Simpan ke variable global untuk filtering
-                renderGists(allGistsData); // Render awal
+                allGistsData = data; 
+                renderGists(allGistsData);
                 
-                // Sembunyikan loading
                 statusDiv.classList.add('hidden');
 
             } catch (err) {
@@ -114,42 +108,41 @@
                         <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
                         <p class="font-bold">Gagal memuat data</p>
                         <p class="text-sm text-gray-600 mt-1">${err.message}</p>
-                        <p class="text-xs text-gray-400 mt-2">Cek koneksi internet atau rate limit GitHub API.</p>
+                        <p class="text-xs text-gray-400 mt-2">Pastikan profil GitHub Anda tidak diset "Private".</p>
                     </div>
                 `;
             }
         }
 
-        // 3. Render Logic
         function renderGists(gists) {
             const container = document.getElementById('gist-container');
-            container.innerHTML = ''; // Reset container
+            container.innerHTML = ''; 
 
             if (gists.length === 0) {
-                container.innerHTML = `<p class="col-span-full text-center text-gray-500 py-10">Tidak ada hasil yang cocok dengan pencarian.</p>`;
+                container.innerHTML = `<p class="col-span-full text-center text-gray-500 py-10">Tidak ada hasil yang cocok.</p>`;
                 return;
             }
 
             gists.forEach(gist => {
-                // Normalisasi data (Handling null descriptions)
                 const firstFileName = Object.keys(gist.files)[0];
                 const fileData = gist.files[firstFileName];
                 const language = fileData.language || 'Text';
-                // Jika deskripsi null, gunakan nama file (Fallback)
                 const rawDesc = gist.description || firstFileName; 
                 
-                // Format Tanggal (Sesuai referensi: slice(0,10) tapi dipercantik sedikit)
-                const createdDate = gist.created_at.slice(0, 10);
-                const updatedDate = gist.updated_at.slice(0, 10);
+                const createdDate = new Date(gist.created_at).toLocaleDateString('id-ID', {
+                    day: 'numeric', month: 'short', year: 'numeric'
+                });
+                
+                // Hitung selisih waktu untuk updated (Opsional, agar terlihat 'fresh')
+                const updatedDateObj = new Date(gist.updated_at);
+                const updatedDate = updatedDateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
-                // Warna Badge Bahasa
                 let langColor = 'bg-gray-100 text-gray-600';
                 if (language === 'JavaScript') langColor = 'bg-yellow-100 text-yellow-700';
                 if (language === 'Python') langColor = 'bg-blue-100 text-blue-700';
                 if (language === 'HTML') langColor = 'bg-orange-100 text-orange-700';
                 if (language === 'CSS') langColor = 'bg-indigo-100 text-indigo-700';
 
-                // HTML Template
                 const cardHtml = `
                 <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition border border-gray-200 flex flex-col fade-in">
                     <div class="p-5 flex-grow">
@@ -158,11 +151,10 @@
                                 ${language}
                             </span>
                             <div class="text-xs text-gray-400 text-right">
-                                <div title="Created"><i class="far fa-calendar-plus mr-1"></i>${createdDate}</div>
+                                <div title="Dibuat"><i class="far fa-calendar-plus mr-1"></i>${createdDate}</div>
                             </div>
                         </div>
 
-                        <!-- DESKRIPSI SEBAGAI LINK UTAMA -->
                         <h2 class="text-lg font-bold leading-tight mb-2">
                             <a href="${gist.html_url}" target="_blank" class="text-gray-800 hover:text-blue-600 hover:underline decoration-2 underline-offset-2">
                                 ${rawDesc}
@@ -174,10 +166,9 @@
                         </div>
                     </div>
 
-                    <!-- Footer Info (Files & Updated) -->
                     <div class="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
-                        <span title="Last Updated">
-                            <i class="fas fa-history mr-1"></i> Update: ${updatedDate}
+                        <span title="Terakhir diupdate">
+                            <i class="fas fa-history mr-1"></i> ${updatedDate}
                         </span>
                         <span title="Total Files" class="font-medium">
                             <i class="far fa-copy mr-1"></i> ${Object.keys(gist.files).length} File
@@ -189,25 +180,17 @@
             });
         }
 
-        // 4. Filtering Logic (Sesuai method contains di referensi)
         function filterGists() {
             const filterValue = document.getElementById('filterInput').value.toLowerCase();
-            
-            // Logic 'contains' dari referensi
             const filteredData = allGistsData.filter(gist => {
                 const desc = (gist.description || "").toLowerCase();
-                // Kita gabungkan pencarian deskripsi ATAU nama file agar lebih UX friendly
                 const fileName = Object.keys(gist.files)[0].toLowerCase();
-                
                 return desc.indexOf(filterValue) !== -1 || fileName.indexOf(filterValue) !== -1;
             });
-
             renderGists(filteredData);
         }
 
-        // Jalankan saat load
         fetchGists();
-
     </script>
 </body>
 </html>
